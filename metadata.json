@@ -1,0 +1,12 @@
+{
+  "name": "Remix: RQ Operations",
+  "description": "Unified operations platform for RQ Alarms. Control room dashboard for alarm dispatch and real-time fleet tracking, with a driver terminal for receiving dispatches and submitting incident reports.",
+  "requestFramePermissions": [
+    "camera",
+    "screen-wake-lock",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

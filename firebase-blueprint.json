@@ -1,0 +1,144 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System user including admins, dispatchers, and drivers.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "role": { "type": "string" },
+        "status": { "type": "string" },
+        "is_on_shift": { "type": "boolean" },
+        "pin": { "type": "string" }
+      },
+      "required": ["username", "role"]
+    },
+    "Vehicle": {
+      "title": "Vehicle",
+      "description": "Responder car or patrol vehicle.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "registration": { "type": "string" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "color": { "type": "string" }
+      },
+      "required": ["registration"]
+    },
+    "Alarm": {
+      "title": "Alarm",
+      "description": "Active panic, medical, or intrusion alarm event.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "client_name": { "type": "string" },
+        "address": { "type": "string" },
+        "status": { "type": "string" },
+        "assigned_driver_id": { "type": "string" },
+        "alarm_type": { "type": "string" },
+        "incident_details": { "type": "string" },
+        "priority": { "type": "string" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "created_at": { "type": "string" },
+        "dispatcher_id": { "type": "string" },
+        "vehicle_id": { "type": "string" }
+      },
+      "required": ["client_name", "address", "status"]
+    },
+    "Feedback": {
+      "title": "Feedback",
+      "description": "Incident report and feedback from completed alarms.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "alarm_id": { "type": "string" },
+        "driver_id": { "type": "string" },
+        "vehicle_id": { "type": "string" },
+        "client_name": { "type": "string" },
+        "address": { "type": "string" },
+        "feedback_text": { "type": "string" },
+        "image_analysis": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["alarm_id", "feedback_text"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "Protected security client details.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["name", "address"]
+    },
+    "DriverShift": {
+      "title": "DriverShift",
+      "description": "Trace of active driver shift hours and kilometers covered.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "driver_id": { "type": "string" },
+        "start_time": { "type": "string" },
+        "end_time": { "type": "string" },
+        "distance_covered": { "type": "number" },
+        "alarms_completed": { "type": "integer" }
+      },
+      "required": ["driver_id"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "System trace audits and security activity log items.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "username": { "type": "string" },
+        "role": { "type": "string" },
+        "action": { "type": "string" },
+        "details": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["action", "details"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Security roles, profiles, statuses, and PIN access."
+    },
+    "/vehicles/{vehicleId}": {
+      "schema": "Vehicle",
+      "description": "Patrol vehicle and GPS positions."
+    },
+    "/alarms/{alarmId}": {
+      "schema": "Alarm",
+      "description": "Dispatched emergency alarms."
+    },
+    "/feedbacks/{feedbackId}": {
+      "schema": "Feedback",
+      "description": "Incident report records."
+    },
+    "/clients/{clientId}": {
+      "schema": "Client",
+      "description": "Registered security client premises."
+    },
+    "/driver_shifts/{shiftId}": {
+      "schema": "DriverShift",
+      "description": "Session records of active driving duties."
+    },
+    "/activity_logs/{logId}": {
+      "schema": "ActivityLog",
+      "description": "Security audit records."
+    }
+  }
+}
