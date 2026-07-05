@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { User, Vehicle, Alarm } from '../types';
-import { Car, MapPin, Clock, CheckCircle2, AlertCircle, Bell, X, Smartphone, LogOut, Settings as SettingsIcon, AlertTriangle, Volume2, VolumeX, Activity } from 'lucide-react';
+import { Car, MapPin, Clock, CheckCircle2, AlertCircle, Bell, X, Smartphone, LogOut, Settings as SettingsIcon, AlertTriangle, Volume2, VolumeX, Activity, History } from 'lucide-react';
 import FeedbackForm from './FeedbackForm';
 import { io } from 'socket.io-client';
 import Logo from './Logo';
@@ -8,6 +8,7 @@ import ProfileSettings from './ProfileSettings';
 import { requestNotificationPermission, showPushNotification, subscribeToPushNotifications } from '../utils/notifications';
 import DriverAlarmMap from './DriverAlarmMap';
 import DriverPerformance from './DriverPerformance';
+import DriverHistory from './DriverHistory';
 import React from 'react';
 
 interface DriverDashboardProps {
@@ -17,7 +18,7 @@ interface DriverDashboardProps {
 
 export default function DriverDashboard({ user, onLogout }: DriverDashboardProps) {
   const [showSettings, setShowSettings] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dispatches' | 'performance'>('dispatches');
+  const [activeTab, setActiveTab] = useState<'dispatches' | 'performance' | 'history'>('dispatches');
   const [ttsEnabled, setTtsEnabled] = useState<boolean>(() => {
     return localStorage.getItem(`rq_tts_enabled_${user.id}`) !== 'false';
   });
@@ -1138,10 +1139,23 @@ export default function DriverDashboard({ user, onLogout }: DriverDashboardProps
           <Clock size={15} />
           Performance Telemetry
         </button>
+        <button
+          onClick={() => setActiveTab('history')}
+          className={`flex-1 py-2.5 rounded-lg text-center font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            activeTab === 'history'
+              ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <History size={15} />
+          History Log
+        </button>
       </div>
 
       {activeTab === 'performance' ? (
         <DriverPerformance user={user} />
+      ) : activeTab === 'history' ? (
+        <DriverHistory user={user} />
       ) : (
         <>
           {/* Shift Control Panel - Unified */}

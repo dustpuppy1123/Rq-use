@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Vehicle, User, Alarm, Feedback, Client, NotificationSettings, ActivityLog } from '../types';
-import { Plus, Car, ShieldCheck, Users, AlertTriangle, MapPin, Clock, CheckCircle2, X, UserPlus, Trash2, Bell, Map as MapIcon, Search, Filter, User as UserIcon, Edit2, LogOut, Settings as SettingsIcon, Building2, Phone, MessageSquare, Send, Key, Database, Monitor, Smartphone } from 'lucide-react';
+import { Plus, Car, ShieldCheck, Users, AlertTriangle, MapPin, Clock, CheckCircle2, X, UserPlus, Trash2, Bell, Map as MapIcon, Search, Filter, User as UserIcon, Edit2, LogOut, Settings as SettingsIcon, Building2, Phone, MessageSquare, Send, Key, Database, Monitor, Smartphone, Sparkles, Download, RefreshCw, FileText } from 'lucide-react';
 import AddressAutocomplete from './AddressAutocomplete';
 import { io } from 'socket.io-client';
 import DriverMap from './DriverMap';
@@ -75,6 +75,308 @@ export default function AdminDashboard({ user, onLogout, viewMode: propViewMode,
   const [testingTelegram, setTestingTelegram] = useState(false);
   const [telegramTestResult, setTelegramTestResult] = useState<{ success?: boolean; error?: string } | null>(null);
   const [isSavingTelegram, setIsSavingTelegram] = useState(false);
+
+  // Shift Summary Generator State
+  const [selectedReportDate, setSelectedReportDate] = useState(new Date().toISOString().split('T')[0]);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [summaryReport, setSummaryReport] = useState<any>(null);
+  const [activeSummaryTab, setActiveSummaryTab] = useState<'summary' | 'alarms' | 'shifts' | 'fleet'>('summary');
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+
+  const handleGenerateShiftSummary = async () => {
+    setIsGeneratingSummary(true);
+    setSummaryReport(null);
+    setShowSummaryModal(true);
+    try {
+      const res = await fetch(`/api/reports/shift-summary?date=${selectedReportDate}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSummaryReport(data);
+        setActiveSummaryTab('summary');
+      } else {
+        const err = await res.json();
+        console.error('Error generating summary:', err);
+        alert(err.error || 'Failed to generate report');
+        setShowSummaryModal(false);
+      }
+    } catch (e) {
+      console.error('Network error generating summary:', e);
+      alert('Network error generating report');
+      setShowSummaryModal(false);
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
+
+  const handleDownloadHTMLReport = () => {
+    if (!summaryReport) return;
+    
+    const { summary, metrics, alarms, feedbacks, shifts, vehicles, date, isFallback } = summaryReport;
+    
+    // Clean up Markdown formatting for display in HTML report
+    const cleanSummaryHtml = summary
+      .replace(/\r\n/g, '\n')
+      .split('\n\n')
+      .map((p: string) => {
+        if (p.startsWith('### ')) {
+          return `<h3 class="text-base font-bold text-slate-800 mt-6 mb-2 border-b border-slate-100 pb-1">${p.substring(4)}</h3>`;
+        }
+        if (p.startsWith('## ')) {
+          return `<h2 class="text-lg font-black text-slate-900 mt-8 mb-3">${p.substring(3)}</h2>`;
+        }
+        if (p.startsWith('- ') || p.startsWith('* ')) {
+          const listItems = p.split('\n').map((item: string) => {
+            const cleanItem = item.replace(/^[-*]\s+/, '').replace(/\*\*([^*]+)\*\*/g, '<strong class="font-bold text-slate-900">$1</strong>');
+            return `<li class="ml-4 list-disc text-sm text-slate-600 mb-1">${cleanItem}</li>`;
+          }).join('');
+          return `<ul class="my-3">${listItems}</ul>`;
+        }
+        const boldP = p.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-bold text-slate-900">$1</strong>');
+        return `<p class="mb-4 text-slate-700 leading-relaxed text-sm">${boldP}</p>`;
+      })
+      .join('');
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RQ Response Security Fleet - Shift Summary Report</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @media print {
+      body { background-color: #ffffff; color: #000000; padding: 0; }
+      .no-print { display: none !important; }
+      .page-break { page-break-before: always; }
+      .shadow-lg { box-shadow: none !important; }
+      .border { border-color: #e2e8f0 !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 font-sans py-10 px-4 md:px-8">
+  <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
+    <!-- Header -->
+    <div class="bg-slate-900 text-white p-8 border-b border-slate-800 relative">
+      <div class="flex justify-between items-start">
+        <div>
+          <span class="text-[10px] uppercase font-mono tracking-widest text-amber-400 bg-amber-950 px-2.5 py-1 rounded font-bold">
+            RQ RESPONSE SECURITY FLEET
+          </span>
+          <h1 class="text-2xl font-black mt-3">Shift Operations & Telemetry Report</h1>
+          <p class="text-slate-400 text-sm mt-1">Generated: ${new Date().toLocaleString()}</p>
+        </div>
+        <div class="text-right">
+          <div class="text-xs text-slate-400 font-mono">REPORTING DATE</div>
+          <div class="text-lg font-bold text-white font-mono mt-0.5">${date}</div>
+          ${isFallback ? '<div class="text-[10px] text-amber-400 bg-amber-950/50 px-2 py-0.5 rounded mt-2 inline-block font-mono">Fallback Data</div>' : ''}
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="p-8 space-y-8">
+      
+      <!-- Metrics Bento Grid -->
+      <div>
+        <h2 class="text-xs uppercase font-bold text-slate-400 tracking-wider mb-3">Key Shift Metrics</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+            <div class="text-xs text-slate-500 font-medium">Total Alarms</div>
+            <div class="text-2xl font-black text-slate-900 mt-1">${metrics.totalAlarms}</div>
+          </div>
+          <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+            <div class="text-xs text-slate-500 font-medium">Resolved (Completed)</div>
+            <div class="text-2xl font-black text-emerald-600 mt-1">${metrics.completedAlarms}</div>
+          </div>
+          <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+            <div class="text-xs text-slate-500 font-medium">Distance Covered</div>
+            <div class="text-2xl font-black text-blue-600 mt-1">${(metrics.totalDistance || 0).toFixed(1)} km</div>
+          </div>
+          <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+            <div class="text-xs text-slate-500 font-medium">Active Drivers</div>
+            <div class="text-2xl font-black text-slate-900 mt-1">${metrics.activeDrivers}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI Executive Summary -->
+      <div class="bg-slate-50 border border-slate-200/60 rounded-2xl p-6">
+        <h2 class="text-base font-bold text-slate-900 flex items-center gap-2 mb-4">
+          <span class="p-1 rounded bg-amber-100 text-amber-700">✨</span>
+          Executive Operations Analysis
+        </h2>
+        <div class="prose max-w-none text-slate-700">
+          ${cleanSummaryHtml}
+        </div>
+      </div>
+
+      <!-- Incident Log Table -->
+      <div class="page-break">
+        <h2 class="text-xs uppercase font-bold text-slate-400 tracking-wider mb-3">Incident Dispatch Log (${alarms.length})</h2>
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+          <table class="w-full text-left text-sm border-collapse">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-xs text-slate-500 uppercase tracking-wider font-semibold">
+                <th class="px-4 py-3">ID</th>
+                <th class="px-4 py-3">Client & Address</th>
+                <th class="px-4 py-3">Priority</th>
+                <th class="px-4 py-3">Type</th>
+                <th class="px-4 py-3">Driver</th>
+                <th class="px-4 py-3">Status</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              ${alarms.map((a: any) => `
+                <tr class="hover:bg-slate-50/50">
+                  <td class="px-4 py-3.5 font-mono text-xs">#${a.id}</td>
+                  <td class="px-4 py-3.5">
+                    <div class="font-bold text-slate-900">${a.client_name}</div>
+                    <div class="text-slate-500 text-xs mt-0.5">${a.address}</div>
+                  </td>
+                  <td class="px-4 py-3.5">
+                    <span class="inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                      a.priority === 'critical' ? 'bg-red-50 text-red-700 border border-red-100' :
+                      a.priority === 'high' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                      'bg-slate-50 text-slate-500'
+                    }">${a.priority || 'medium'}</span>
+                  </td>
+                  <td class="px-4 py-3.5 text-xs font-semibold text-slate-700">${a.alarm_type || 'Alarm'}</td>
+                  <td class="px-4 py-3.5 text-xs text-slate-600">${a.driver_name || 'Unassigned'}</td>
+                  <td class="px-4 py-3.5">
+                    <span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                      a.status === 'completed' ? 'bg-emerald-50 text-emerald-700' :
+                      a.status === 'pending' ? 'bg-red-50 text-red-700' :
+                      'bg-blue-50 text-blue-700'
+                    }">${a.status}</span>
+                  </td>
+                </tr>
+              `).join('')}
+              ${alarms.length === 0 ? '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">No alarms recorded</td></tr>' : ''}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Driver Shift Table -->
+      <div class="page-break mt-8">
+        <h2 class="text-xs uppercase font-bold text-slate-400 tracking-wider mb-3">Driver Shifts & Telemetry</h2>
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+          <table class="w-full text-left text-sm border-collapse">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-xs text-slate-500 uppercase tracking-wider font-semibold">
+                <th class="px-4 py-3">Driver Name</th>
+                <th class="px-4 py-3">Shift Start</th>
+                <th class="px-4 py-3">Shift End</th>
+                <th class="px-4 py-3">Distance covered</th>
+                <th class="px-4 py-3">Alarms Resolved</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              ${shifts.map((s: any) => `
+                <tr class="hover:bg-slate-50/50">
+                  <td class="px-4 py-3.5 font-bold text-slate-900">${s.driver_name}</td>
+                  <td class="px-4 py-3.5 text-xs text-slate-500 font-mono">${new Date(s.start_time).toLocaleString()}</td>
+                  <td class="px-4 py-3.5 text-xs font-mono">${s.end_time ? new Date(s.end_time).toLocaleString() : '<span class="text-emerald-600 font-bold">ACTIVE SHIFT</span>'}</td>
+                  <td class="px-4 py-3.5 text-xs font-mono font-bold">${(s.distance_covered || 0).toFixed(1)} km</td>
+                  <td class="px-4 py-3.5 font-semibold text-slate-700">${s.alarms_completed || 0}</td>
+                </tr>
+              `).join('')}
+              ${shifts.length === 0 ? '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">No shifts recorded</td></tr>' : ''}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Fleet Status Table -->
+      <div class="page-break mt-8">
+        <h2 class="text-xs uppercase font-bold text-slate-400 tracking-wider mb-3">Fleet Status & Telemetry</h2>
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+          <table class="w-full text-left text-sm border-collapse">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-xs text-slate-500 uppercase tracking-wider font-semibold">
+                <th class="px-4 py-3">Vehicle</th>
+                <th class="px-4 py-3">Registration</th>
+                <th class="px-4 py-3">Last Coordinates</th>
+                <th class="px-4 py-3">Duty Assignment</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              ${vehicles.map((v: any) => `
+                <tr class="hover:bg-slate-50/50">
+                  <td class="px-4 py-3.5 flex items-center gap-3">
+                    <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${v.color || '#64748b'}"></span>
+                    <span class="font-bold text-slate-800">RQ Response Unit</span>
+                  </td>
+                  <td class="px-4 py-3.5 font-mono text-xs font-bold text-slate-900">${v.registration}</td>
+                  <td class="px-4 py-3.5 font-mono text-xs text-slate-500">${v.lat ? `${v.lat.toFixed(4)}, ${v.lng.toFixed(4)}` : 'Offline / No GPS'}</td>
+                  <td class="px-4 py-3.5 text-xs">
+                    ${v.active_driver ? `<span class="bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-semibold">Assigned: ${v.active_driver}</span>` : '<span class="text-slate-400">Available</span>'}
+                  </td>
+                </tr>
+              `).join('')}
+              ${vehicles.length === 0 ? '<tr><td colspan="4" class="px-4 py-8 text-center text-slate-400">No vehicles recorded</td></tr>' : ''}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="bg-slate-50 p-6 border-t border-slate-200 flex justify-between items-center no-print">
+      <button onclick="window.print()" class="px-4 py-2 bg-slate-900 text-white hover:bg-slate-800 rounded-lg text-xs font-bold transition-all shadow">
+        Print Report
+      </button>
+      <span class="text-xs text-slate-400 font-mono">Confidential • Internal Operations Only</span>
+    </div>
+  </div>
+</body>
+</html>
+`;
+
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `RQ_Shift_Summary_${date}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadMarkdownReport = () => {
+    if (!summaryReport) return;
+    const { summary, metrics, date, isFallback } = summaryReport;
+    
+    const mdContent = `# RQ Response Security Fleet - Shift Operations Report
+Reporting Date: ${date} ${isFallback ? '(Simulation/Sample Fallback Data)' : ''}
+Generated At: ${new Date().toLocaleString()}
+
+## 📊 SHIFT METRICS
+- Total Alarms Dispatched: ${metrics.totalAlarms}
+- Alarms Completed/Resolved: ${metrics.completedAlarms}
+- Distance Covered by Fleet: ${(metrics.totalDistance || 0).toFixed(1)} km
+- Active Responders on Duty: ${metrics.activeDrivers}
+
+## 🤖 AI OPERATIONAL EXECUTIVE SUMMARY
+${summary}
+
+---
+Confidential • RQ Response Security Fleet Internal Operations Only
+`;
+
+    const blob = new Blob([mdContent], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `RQ_Shift_Summary_${date}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   // Fetch Telegram Config from server
   const fetchTelegramConfig = async () => {
@@ -1194,8 +1496,46 @@ export default function AdminDashboard({ user, onLogout, viewMode: propViewMode,
       )}
 
       {activeTab === 'reports' && (hasPermission(user, 'view_all_reports') || hasPermission(user, 'view_assigned_reports')) && (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-          <h3 className="text-lg font-semibold text-slate-800 mb-6">Call Out Reports</h3>
+        <div className="space-y-6">
+          {/* Shift Summary Generator Bento Section */}
+          <div className="bg-slate-950 text-white rounded-3xl p-6 md:p-8 border border-slate-800 shadow-xl overflow-hidden relative">
+            <div className="absolute top-0 right-0 p-8 opacity-[0.03] pointer-events-none">
+              <FileText size={240} className="text-white" />
+            </div>
+            
+            <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+              <div className="space-y-2 max-w-xl">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-400 text-xs font-bold border border-amber-500/20">
+                  <Sparkles size={12} /> AI-Powered Analytics
+                </span>
+                <h3 className="text-2xl font-black tracking-tight text-white">Daily Shift Operations & Telemetry Report</h3>
+                <p className="text-slate-400 text-sm leading-relaxed">
+                  Compile live incident logs, active driver duty shifts, and fleet GPS telemetry into a comprehensive, downloadable executive intelligence report.
+                </p>
+              </div>
+
+              <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center gap-4 shrink-0">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold">Select Reporting Date</label>
+                  <input
+                    type="date"
+                    value={selectedReportDate}
+                    onChange={(e) => setSelectedReportDate(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 text-white rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none font-mono"
+                  />
+                </div>
+                <button
+                  onClick={handleGenerateShiftSummary}
+                  className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-6 py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 text-sm hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                >
+                  <Sparkles size={16} /> Generate Shift Summary
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <h3 className="text-lg font-semibold text-slate-800 mb-6">Call Out Reports</h3>
           <div className="space-y-6">
             {reports.map(report => (
               <div key={report.id} className="border border-slate-200 rounded-xl p-5 hover:shadow-md transition-shadow">
@@ -1239,7 +1579,8 @@ export default function AdminDashboard({ user, onLogout, viewMode: propViewMode,
             )}
           </div>
         </div>
-      )}
+      </div>
+    )}
 
       {activeTab === 'vehicles' && hasPermission(user, 'manage_vehicles') && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2479,6 +2820,263 @@ export default function AdminDashboard({ user, onLogout, viewMode: propViewMode,
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Shift Summary Report Modal */}
+      {showSummaryModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[110] p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-200">
+            
+            {/* Modal Header */}
+            <div className="bg-slate-900 text-white px-6 py-5 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400">
+                  <Sparkles size={24} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white tracking-tight">Shift Operations Intelligence Report</h3>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5">Date: {selectedReportDate} {summaryReport?.isFallback ? '(Simulation Fallback)' : ''}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowSummaryModal(false)}
+                className="text-slate-400 hover:text-white p-2 rounded-full hover:bg-slate-800 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Sub-Header (Actions) */}
+            {summaryReport && (
+              <div className="bg-slate-50 border-b border-slate-100 px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex gap-1.5 overflow-x-auto">
+                  {(['summary', 'alarms', 'shifts', 'fleet'] as const).map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveSummaryTab(tab)}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold capitalize transition-all shrink-0 ${
+                        activeSummaryTab === tab 
+                          ? 'bg-slate-900 text-white shadow-sm' 
+                          : 'text-slate-600 hover:bg-slate-200/60'
+                      }`}
+                    >
+                      {tab === 'summary' ? '✨ AI Summary' : tab === 'alarms' ? '🚨 Incidents' : tab === 'shifts' ? '👥 Duty Shifts' : '🚗 Fleet Telemetry'}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleDownloadHTMLReport}
+                    className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow cursor-pointer"
+                    title="Download styled print-ready HTML document"
+                  >
+                    <Download size={14} /> Download HTML
+                  </button>
+                  <button
+                    onClick={handleDownloadMarkdownReport}
+                    className="px-3.5 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                    title="Download as standard Markdown text file"
+                  >
+                    <FileText size={14} /> Download MD
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Modal Body / Scrollable Area */}
+            <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-slate-50/50">
+              {isGeneratingSummary ? (
+                <div className="flex flex-col items-center justify-center py-20 space-y-4">
+                  <RefreshCw className="animate-spin text-amber-500" size={40} />
+                  <div className="text-center">
+                    <p className="font-bold text-slate-800 text-lg">Compiling Operational Records...</p>
+                    <p className="text-xs text-slate-500 mt-1">Analyzing incident logs, GPS logs, and shift rosters with Gemini</p>
+                  </div>
+                </div>
+              ) : summaryReport ? (
+                <div className="space-y-6">
+                  
+                  {/* Tab Contents: AI Summary */}
+                  {activeSummaryTab === 'summary' && (
+                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+                      <div className="flex items-center gap-2 text-amber-500 font-bold mb-4">
+                        <Sparkles size={18} />
+                        <span className="text-sm uppercase tracking-wider font-mono">Executive Operations Analysis</span>
+                      </div>
+                      <div className="prose max-w-none text-slate-700 whitespace-pre-wrap text-sm leading-relaxed">
+                        {summaryReport.summary}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tab Contents: Incidents */}
+                  {activeSummaryTab === 'alarms' && (
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                      <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                        <span className="font-bold text-slate-800 text-sm">Incident Dispatch Log</span>
+                        <span className="bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-full font-bold">{summaryReport.alarms.length} Recorded</span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-200 text-xs text-slate-500 uppercase font-semibold">
+                              <th className="px-5 py-3">ID</th>
+                              <th className="px-5 py-3">Client & Address</th>
+                              <th className="px-5 py-3">Priority</th>
+                              <th className="px-5 py-3">Type</th>
+                              <th className="px-5 py-3">Assigned Driver</th>
+                              <th className="px-5 py-3">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {summaryReport.alarms.map((a: any) => (
+                              <tr key={a.id} className="hover:bg-slate-50/40">
+                                <td className="px-5 py-3.5 font-mono text-xs text-slate-400">#{a.id}</td>
+                                <td className="px-5 py-3.5">
+                                  <div className="font-bold text-slate-900">{a.client_name}</div>
+                                  <div className="text-slate-500 text-xs mt-0.5">{a.address}</div>
+                                </td>
+                                <td className="px-5 py-3.5">
+                                  <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                    a.priority === 'critical' ? 'bg-red-50 text-red-700 border border-red-100' :
+                                    a.priority === 'high' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                                    'bg-slate-50 text-slate-500'
+                                  }`}>{a.priority || 'medium'}</span>
+                                </td>
+                                <td className="px-5 py-3.5 text-xs font-semibold text-slate-700">{a.alarm_type || 'Alarm'}</td>
+                                <td className="px-5 py-3.5 text-xs text-slate-600">{a.driver_name || 'Unassigned'}</td>
+                                <td className="px-5 py-3.5">
+                                  <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                    a.status === 'completed' ? 'bg-emerald-50 text-emerald-700' :
+                                    a.status === 'pending' ? 'bg-red-50 text-red-700' :
+                                    'bg-blue-50 text-blue-700'
+                                  }`}>{a.status}</span>
+                                </td>
+                              </tr>
+                            ))}
+                            {summaryReport.alarms.length === 0 && (
+                              <tr>
+                                <td colSpan={6} className="px-5 py-10 text-center text-slate-400">No alarms recorded for this date</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tab Contents: Duty Shifts */}
+                  {activeSummaryTab === 'shifts' && (
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                      <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                        <span className="font-bold text-slate-800 text-sm">Duty Shifts & Distance</span>
+                        <span className="bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-full font-bold">{summaryReport.shifts.length} Shifts active</span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-200 text-xs text-slate-500 uppercase font-semibold">
+                              <th className="px-5 py-3">Driver Name</th>
+                              <th className="px-5 py-3">Shift Start</th>
+                              <th className="px-5 py-3">Shift End</th>
+                              <th className="px-5 py-3">Distance Covered</th>
+                              <th className="px-5 py-3">Alarms Resolved</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {summaryReport.shifts.map((s: any) => (
+                              <tr key={s.id} className="hover:bg-slate-50/40">
+                                <td className="px-5 py-3.5 font-bold text-slate-900">{s.driver_name}</td>
+                                <td className="px-5 py-3.5 text-xs text-slate-500 font-mono">{new Date(s.start_time).toLocaleString()}</td>
+                                <td className="px-5 py-3.5 text-xs font-mono">
+                                  {s.end_time ? new Date(s.end_time).toLocaleString() : <span className="text-emerald-600 font-bold">ACTIVE SHIFT</span>}
+                                </td>
+                                <td className="px-5 py-3.5 text-xs font-mono font-bold text-slate-800">{(s.distance_covered || 0).toFixed(1)} km</td>
+                                <td className="px-5 py-3.5 font-semibold text-slate-700">{s.alarms_completed || 0}</td>
+                              </tr>
+                            ))}
+                            {summaryReport.shifts.length === 0 && (
+                              <tr>
+                                <td colSpan={5} className="px-5 py-10 text-center text-slate-400">No shifts active on this date</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tab Contents: Fleet Status */}
+                  {activeSummaryTab === 'fleet' && (
+                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                      <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                        <span className="font-bold text-slate-800 text-sm">Active Fleet Status & GPS Telemetry</span>
+                        <span className="bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-full font-bold">{summaryReport.vehicles.length} Units Online</span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm border-collapse">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-200 text-xs text-slate-500 uppercase font-semibold">
+                              <th className="px-5 py-3">Vehicle</th>
+                              <th className="px-5 py-3">Registration</th>
+                              <th className="px-5 py-3">Last GPS Location</th>
+                              <th className="px-5 py-3">Assigned Patrol Officer</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {summaryReport.vehicles.map((v: any) => (
+                              <tr key={v.id} className="hover:bg-slate-50/40">
+                                <td className="px-5 py-3.5 flex items-center gap-3">
+                                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: v.color || '#64748b' }}></span>
+                                  <span className="font-bold text-slate-800">RQ Response Unit</span>
+                                </td>
+                                <td className="px-5 py-3.5 font-mono text-xs font-bold text-slate-950">{v.registration}</td>
+                                <td className="px-5 py-3.5 font-mono text-xs text-slate-500">
+                                  {v.lat ? `${v.lat.toFixed(4)}, ${v.lng.toFixed(4)}` : 'No Active GPS Broadcast'}
+                                </td>
+                                <td className="px-5 py-3.5 text-xs">
+                                  {v.active_driver ? (
+                                    <span className="bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-md font-semibold border border-blue-100">
+                                      {v.active_driver}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400">Patrol Ready / Standby</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                            {summaryReport.vehicles.length === 0 && (
+                              <tr>
+                                <td colSpan={4} className="px-5 py-10 text-center text-slate-400">No fleet vehicles in database</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              ) : (
+                <div className="text-center py-20 text-slate-400">
+                  <p>Failed to generate shift summary report.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-slate-50 border-t border-slate-100 px-6 py-4 flex justify-between items-center">
+              <span className="text-xs text-slate-400 font-mono">CONFIDENTIAL OPERATIONS RECORD</span>
+              <button
+                onClick={() => setShowSummaryModal(false)}
+                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                Close Report
+              </button>
+            </div>
+
           </div>
         </div>
       )}
