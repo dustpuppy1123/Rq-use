@@ -83,6 +83,35 @@ export default function AdminDashboard({ user, onLogout, viewMode: propViewMode,
   const [activeSummaryTab, setActiveSummaryTab] = useState<'summary' | 'alarms' | 'shifts' | 'fleet'>('summary');
   const [showSummaryModal, setShowSummaryModal] = useState(false);
 
+  // Incident response state
+  const [activeResponseId, setActiveResponseId] = useState<number | null>(null);
+  const [responseText, setResponseText] = useState('');
+
+  const handleSubmitResponse = async (reportId: number) => {
+    if (!responseText.trim()) return;
+    try {
+      const res = await fetch(`/api/reports/${reportId}/response`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          responseText,
+          responderId: user.id
+        })
+      });
+      if (res.ok) {
+        setActiveResponseId(null);
+        setResponseText('');
+        fetchData();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to submit response.');
+      }
+    } catch (e) {
+      console.error('Error submitting incident response:', e);
+      alert('Error submitting response.');
+    }
+  };
+
   const handleGenerateShiftSummary = async () => {
     setIsGeneratingSummary(true);
     setSummaryReport(null);
@@ -493,6 +522,10 @@ Confidential • RQ Response Security Fleet Internal Operations Only
     });
 
     socket.on('users_updated', () => {
+      fetchData();
+    });
+
+    socket.on('reports_updated', () => {
       fetchData();
     });
 
@@ -1570,6 +1603,59 @@ Confidential • RQ Response Security Fleet Internal Operations Only
                     <p className="text-indigo-900 whitespace-pre-wrap text-sm">{report.image_analysis}</p>
                   </div>
                 )}
+
+                {/* Management Response Section */}
+                <div className="mt-4 pt-4 border-t border-slate-100">
+                  {report.admin_response ? (
+                    <div className="bg-amber-50/50 p-4 rounded-xl border border-amber-100/60">
+                      <h5 className="text-xs font-bold text-amber-800 uppercase tracking-wider mb-1 flex items-center gap-1">
+                        <Sparkles size={12} /> Management Response
+                      </h5>
+                      <p className="text-slate-800 text-sm whitespace-pre-wrap font-medium">{report.admin_response}</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {activeResponseId === report.id ? (
+                        <div className="space-y-2">
+                          <textarea
+                            value={responseText}
+                            onChange={(e) => setResponseText(e.target.value)}
+                            placeholder="Type manager feedback or acknowledgment response..."
+                            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none"
+                            rows={2}
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleSubmitResponse(report.id)}
+                              className="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors"
+                            >
+                              Submit Response
+                            </button>
+                            <button
+                              onClick={() => {
+                                setActiveResponseId(null);
+                                setResponseText('');
+                              }}
+                              className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-200 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setActiveResponseId(report.id);
+                            setResponseText('');
+                          }}
+                          className="text-xs text-slate-500 hover:text-amber-600 font-bold flex items-center gap-1.5 transition-colors"
+                        >
+                          <MessageSquare size={12} /> Respond to Incident Report
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
             {reports.length === 0 && (

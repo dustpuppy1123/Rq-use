@@ -342,6 +342,12 @@ db.pragma('journal_mode = WAL');
     // Column already exists
   }
 
+  try {
+    db.exec('ALTER TABLE feedbacks ADD COLUMN admin_response TEXT');
+  } catch (e) {
+    // Column already exists
+  }
+
   // Insert default users if not exists
   const insertUser = db.prepare('INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)');
   insertUser.run('admin', 'admin', 'admin');
@@ -1759,6 +1765,55 @@ The shift completed with a total of ${totalAlarms} alarms dispatched, resulting 
       `).all();
     }
     res.json(reports);
+  });
+
+  app.post('/api/reports/:id/response', express.json(), (req, res) => {
+    const { responseText, responderId } = req.body;
+    const reportId = req.params.id;
+    try {
+      const responder = responderId ? db.prepare('SELECT username, role FROM users WHERE id = ?').get(responderId) as any : null;
+      const respName = responder ? responder.username : 'Management';
+      const respRole = responder ? responder.role : 'admin';
+
+      db.prepare('UPDATE feedbacks SET admin_response = ? WHERE id = ?').run(responseText, reportId);
+
+      const feedback = db.prepare('SELECT * FROM feedbacks WHERE id = ?').get(reportId) as any;
+      if (feedback) {
+        logActivity(
+          responderId || null,
+          respName,
+          respRole,
+          'submit_feedback_response',
+          `Added management response to incident report #${reportId} for client: "${feedback.client_name}"`
+        );
+
+        // Emit socket event to control room to update reports view
+        io.to('control_room').emit('reports_updated');
+
+        // Emit socket event to the specific driver!
+        if (feedback.driver_id) {
+          io.to(`driver_${feedback.driver_id}`).emit('feedback_response', {
+            feedbackId: feedback.id,
+            clientName: feedback.client_name,
+            adminResponse: responseText
+          });
+
+          // Send push notification to the driver
+          sendPushNotification(feedback.driver_id, {
+            title: '📝 Incident Response Received',
+            body: `Management responded to your report for ${feedback.client_name}`,
+            url: `/driver`
+          }).catch(err => {
+            console.error('Failed to dispatch push notification for incident response:', err);
+          });
+        }
+      }
+
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error('Error adding feedback response:', e);
+      res.status(500).json({ error: 'Failed to add feedback response: ' + e.message });
+    }
   });
 
   app.get('/api/clients', (req, res) => {

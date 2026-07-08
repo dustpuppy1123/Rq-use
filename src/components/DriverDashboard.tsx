@@ -460,6 +460,20 @@ export default function DriverDashboard({ user, onLogout }: DriverDashboardProps
       }, 5000);
     });
 
+    socket.on('feedback_response', (data: { feedbackId: number, clientName: string, adminResponse: string }) => {
+      const newNotif = {
+        id: Date.now(),
+        message: `Management response: "${data.adminResponse}" for ${data.clientName}`
+      };
+      setNotifications(prev => [...prev, newNotif]);
+      
+      showPushNotification(user.id, 'Incident Response Received', `Management responded to report for ${data.clientName}`, 'statusUpdates');
+      
+      setTimeout(() => {
+        setNotifications(prev => prev.filter(n => n.id !== newNotif.id));
+      }, 10000);
+    });
+
     socket.on('alarm_status_updated', () => {
       if (shiftActive) {
         fetchAlarms();
@@ -490,16 +504,36 @@ export default function DriverDashboard({ user, onLogout }: DriverDashboardProps
         });
       };
 
+      const handleLocationError = (context: string, error: any) => {
+        console.warn(`Gracefully handled: ${context}: ${error.message || error}`);
+        
+        // If there's no location currently set, let's use the vehicle's position or a default one as fallback
+        if (!locationRef.current) {
+          const fallbackLoc = selectedVehicle && selectedVehicle.lat && selectedVehicle.lng
+            ? { lat: selectedVehicle.lat, lng: selectedVehicle.lng }
+            : { lat: -26.2041, lng: 28.0473 }; // Default Johannesburg center
+          
+          setDriverLocation(fallbackLoc);
+          socket.emit('driver_location_update', {
+            driverId: user.id,
+            driverName: user.username,
+            vehicleId: selectedVehicle?.id,
+            isSOS: localStorage.getItem(`rq_driver_sos_${user.id}`) === 'true',
+            ...fallbackLoc
+          });
+        }
+      };
+
       navigator.geolocation.getCurrentPosition(
         sendLocation,
-        (error) => console.error('Error getting initial location:', error),
-        { enableHighAccuracy: true, maximumAge: 10000, timeout: 5000 }
+        (error) => handleLocationError('Error getting initial location', error),
+        { enableHighAccuracy: false, maximumAge: 30000, timeout: 15000 }
       );
 
       watchId = navigator.geolocation.watchPosition(
         sendLocation,
-        (error) => console.error('Error watching location:', error),
-        { enableHighAccuracy: true, maximumAge: 10000, timeout: 5000 }
+        (error) => handleLocationError('Error watching location', error),
+        { enableHighAccuracy: false, maximumAge: 30000, timeout: 15000 }
       );
 
       // Heartbeat: Send location update every 30s even if stationary

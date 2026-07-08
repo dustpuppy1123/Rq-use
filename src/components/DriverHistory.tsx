@@ -229,6 +229,15 @@ export default function DriverHistory({ user }: DriverHistoryProps) {
                                   </div>
                                 </div>
                               )}
+                              {linkedFeedback.admin_response && (
+                                <div className="mt-2.5 p-2 bg-amber-50 rounded-lg border border-amber-100 flex items-start gap-1.5 text-[11px] text-slate-800">
+                                  <Sparkles size={12} className="text-amber-600 shrink-0 mt-0.5" />
+                                  <div>
+                                    <span className="font-bold">Management Response: </span>
+                                    <span>{linkedFeedback.admin_response}</span>
+                                  </div>
+                                </div>
+                              )}
                               <span className="text-[10px] text-slate-400 font-mono block mt-2">
                                 Submitted At: {new Date(linkedFeedback.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                               </span>
@@ -306,6 +315,16 @@ export default function DriverHistory({ user }: DriverHistoryProps) {
                       <div>
                         <span className="font-bold">AI Image Verification: </span>
                         <span>{report.image_analysis}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {report.admin_response && (
+                    <div className="mt-2.5 p-3 bg-amber-50/50 rounded-xl border border-amber-100/60 flex items-start gap-2 text-xs text-slate-800">
+                      <Sparkles size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold text-amber-800 uppercase tracking-wider text-[10px] block mb-0.5">Management Response</span>
+                        <p className="whitespace-pre-wrap font-medium">{report.admin_response}</p>
                       </div>
                     </div>
                   )}
